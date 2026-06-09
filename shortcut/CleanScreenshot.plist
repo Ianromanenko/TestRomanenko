@@ -1,0 +1,443 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Clean Screenshot — best-effort, UNSIGNED shortcut definition.
+
+  This captures the action graph described in BUILD_GUIDE.md. Apple's signed
+  shortcut format is finicky; an unsigned plist may not import cleanly on every
+  iOS version. Enable Settings -> Shortcuts -> Allow Untrusted Shortcuts before
+  importing, and treat this as a reference/starting point rather than a
+  guaranteed one-tap install. Replace YOUR_ANTHROPIC_API_KEY below.
+-->
+<plist version="1.0">
+<dict>
+	<key>WFWorkflowClientVersion</key>
+	<string>2607.0.3</string>
+	<key>WFWorkflowMinimumClientVersion</key>
+	<integer>900</integer>
+	<key>WFWorkflowMinimumClientVersionString</key>
+	<string>900</string>
+	<key>WFWorkflowIcon</key>
+	<dict>
+		<key>WFWorkflowIconStartColor</key>
+		<integer>463140863</integer>
+		<key>WFWorkflowIconGlyphNumber</key>
+		<integer>59511</integer>
+	</dict>
+	<key>WFWorkflowImportQuestions</key>
+	<array/>
+	<key>WFWorkflowTypes</key>
+	<array>
+		<string>NCWidget</string>
+		<string>WatchKit</string>
+	</array>
+	<key>WFWorkflowInputContentItemClasses</key>
+	<array>
+		<string>WFAppStoreAppContentItem</string>
+		<string>WFImageContentItem</string>
+		<string>WFGenericFileContentItem</string>
+	</array>
+	<key>WFWorkflowActions</key>
+	<array>
+
+		<!-- 1. Take Screenshot -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.takescreenshot</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>SHOT-0001-0000-0000-000000000001</string>
+				<key>CustomOutputName</key>
+				<string>Screenshot</string>
+			</dict>
+		</dict>
+
+		<!-- 2a. Get Details of Images -> Width -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.getimageresolution</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>DIMW-0002-0000-0000-000000000002</string>
+				<key>CustomOutputName</key>
+				<string>W</string>
+				<key>WFContentItemPropertyName</key>
+				<string>Width</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>ActionOutput</string>
+						<key>OutputUUID</key>
+						<string>SHOT-0001-0000-0000-000000000001</string>
+						<key>OutputName</key>
+						<string>Screenshot</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+			</dict>
+		</dict>
+
+		<!-- 2b. Get Details of Images -> Height -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.getimageresolution</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>DIMH-0003-0000-0000-000000000003</string>
+				<key>CustomOutputName</key>
+				<string>H</string>
+				<key>WFContentItemPropertyName</key>
+				<string>Height</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>ActionOutput</string>
+						<key>OutputUUID</key>
+						<string>SHOT-0001-0000-0000-000000000001</string>
+						<key>OutputName</key>
+						<string>Screenshot</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+			</dict>
+		</dict>
+
+		<!-- 3. Base64 Encode -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.base64encode</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>B64A-0004-0000-0000-000000000004</string>
+				<key>CustomOutputName</key>
+				<string>ImageBase64</string>
+				<key>WFEncodeMode</key>
+				<string>Encode</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>ActionOutput</string>
+						<key>OutputUUID</key>
+						<string>SHOT-0001-0000-0000-000000000001</string>
+						<key>OutputName</key>
+						<string>Screenshot</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+			</dict>
+		</dict>
+
+		<!-- 4. Text: API key -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.gettext</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>AKEY-0005-0000-0000-000000000005</string>
+				<key>CustomOutputName</key>
+				<string>ApiKey</string>
+				<key>WFTextActionText</key>
+				<string>YOUR_ANTHROPIC_API_KEY</string>
+			</dict>
+		</dict>
+
+		<!-- 5. Text: request body (base64 inlined) -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.gettext</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>BODY-0006-0000-0000-000000000006</string>
+				<key>CustomOutputName</key>
+				<string>RequestBody</string>
+				<key>WFTextActionText</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>string</key>
+						<string>{"model":"claude-opus-4-8","max_tokens":1024,"system":"You are given a screenshot taken on an iPhone. Identify the single main content region — the primary photo, image, artwork, video frame, map, or document that the user actually cares about. EXCLUDE all interface chrome: the iOS status bar, app navigation/title bars, toolbars, tab bars, search bars, captions, and side margins. Return the bounding box of just that content region as fractions of the full image, where 0,0 is top-left and 1,1 is bottom-right. If the whole image is already content, return x=0, y=0, width=1, height=1.","messages":[{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"￼"}},{"type":"text","text":"Return the bounding box of the main content."}]}],"output_config":{"format":{"type":"json_schema","schema":{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"}},"required":["x","y","width","height"],"additionalProperties":false}}}}</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{283, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>ActionOutput</string>
+								<key>OutputUUID</key>
+								<string>B64A-0004-0000-0000-000000000004</string>
+								<key>OutputName</key>
+								<string>ImageBase64</string>
+							</dict>
+						</dict>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
+			</dict>
+		</dict>
+
+		<!-- 6. Get Contents of URL (POST to Claude) -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.downloadurl</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>HTTP-0007-0000-0000-000000000007</string>
+				<key>CustomOutputName</key>
+				<string>APIResponse</string>
+				<key>WFURL</key>
+				<string>https://api.anthropic.com/v1/messages</string>
+				<key>WFHTTPMethod</key>
+				<string>POST</string>
+				<key>WFHTTPHeaders</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>WFDictionaryFieldValueItems</key>
+						<array>
+							<dict>
+								<key>WFItemType</key>
+								<integer>0</integer>
+								<key>WFKey</key>
+								<dict>
+									<key>Value</key>
+									<dict>
+										<key>string</key>
+										<string>x-api-key</string>
+									</dict>
+									<key>WFSerializationType</key>
+									<string>WFTextTokenString</string>
+								</dict>
+								<key>WFValue</key>
+								<dict>
+									<key>Value</key>
+									<dict>
+										<key>string</key>
+										<string>￼</string>
+										<key>attachmentsByRange</key>
+										<dict>
+											<key>{0, 1}</key>
+											<dict>
+												<key>Type</key>
+												<string>ActionOutput</string>
+												<key>OutputUUID</key>
+												<string>AKEY-0005-0000-0000-000000000005</string>
+												<key>OutputName</key>
+												<string>ApiKey</string>
+											</dict>
+										</dict>
+									</dict>
+									<key>WFSerializationType</key>
+									<string>WFTextTokenString</string>
+								</dict>
+							</dict>
+							<dict>
+								<key>WFItemType</key>
+								<integer>0</integer>
+								<key>WFKey</key>
+								<dict>
+									<key>Value</key>
+									<dict>
+										<key>string</key>
+										<string>anthropic-version</string>
+									</dict>
+									<key>WFSerializationType</key>
+									<string>WFTextTokenString</string>
+								</dict>
+								<key>WFValue</key>
+								<dict>
+									<key>Value</key>
+									<dict>
+										<key>string</key>
+										<string>2023-06-01</string>
+									</dict>
+									<key>WFSerializationType</key>
+									<string>WFTextTokenString</string>
+								</dict>
+							</dict>
+							<dict>
+								<key>WFItemType</key>
+								<integer>0</integer>
+								<key>WFKey</key>
+								<dict>
+									<key>Value</key>
+									<dict>
+										<key>string</key>
+										<string>content-type</string>
+									</dict>
+									<key>WFSerializationType</key>
+									<string>WFTextTokenString</string>
+								</dict>
+								<key>WFValue</key>
+								<dict>
+									<key>Value</key>
+									<dict>
+										<key>string</key>
+										<string>application/json</string>
+									</dict>
+									<key>WFSerializationType</key>
+									<string>WFTextTokenString</string>
+								</dict>
+							</dict>
+						</array>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFDictionaryFieldValue</string>
+				</dict>
+				<key>WFHTTPBodyType</key>
+				<string>File</string>
+				<key>WFRequestVariable</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>ActionOutput</string>
+						<key>OutputUUID</key>
+						<string>BODY-0006-0000-0000-000000000006</string>
+						<key>OutputName</key>
+						<string>RequestBody</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+			</dict>
+		</dict>
+
+		<!-- 7. Get Dictionary from response -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.detect.dictionary</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>DIC1-0008-0000-0000-000000000008</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>ActionOutput</string>
+						<key>OutputUUID</key>
+						<string>HTTP-0007-0000-0000-000000000007</string>
+						<key>OutputName</key>
+						<string>APIResponse</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+			</dict>
+		</dict>
+
+		<!-- 8. Get Dictionary Value: content -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.getvalueforkey</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>GVAL-0009-0000-0000-000000000009</string>
+				<key>CustomOutputName</key>
+				<string>ContentList</string>
+				<key>WFGetDictionaryValueType</key>
+				<string>Value</string>
+				<key>WFDictionaryKey</key>
+				<string>content</string>
+			</dict>
+		</dict>
+
+		<!-- 9. Get first item of list -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.getitemfromlist</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>ITEM-0010-0000-0000-000000000010</string>
+				<key>CustomOutputName</key>
+				<string>FirstBlock</string>
+				<key>WFItemSpecifier</key>
+				<string>First Item</string>
+			</dict>
+		</dict>
+
+		<!-- 10. Get Dictionary Value: text -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.getvalueforkey</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>GTXT-0011-0000-0000-000000000011</string>
+				<key>CustomOutputName</key>
+				<string>BoxJSON</string>
+				<key>WFGetDictionaryValueType</key>
+				<string>Value</string>
+				<key>WFDictionaryKey</key>
+				<string>text</string>
+			</dict>
+		</dict>
+
+		<!-- 11. Parse box JSON into a dictionary -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.detect.dictionary</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>DIC2-0012-0000-0000-000000000012</string>
+				<key>CustomOutputName</key>
+				<string>Box</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>ActionOutput</string>
+						<key>OutputUUID</key>
+						<string>GTXT-0011-0000-0000-000000000011</string>
+						<key>OutputName</key>
+						<string>BoxJSON</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+			</dict>
+		</dict>
+
+		<!--
+		  12. Compute crop rect + Crop Image.
+		  The Calculate steps (width*W, height*H, x*W, y*H) and the final
+		  Crop Image with Position=Custom are described step-by-step in
+		  BUILD_GUIDE.md §11-12. They are easier to wire in the visual editor
+		  than to author here, so finish them in the Shortcuts app after import.
+		-->
+
+		<!-- 13. Save to Photos -->
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.savetocameraroll</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>SAVE-0013-0000-0000-000000000013</string>
+			</dict>
+		</dict>
+
+	</array>
+</dict>
+</plist>
