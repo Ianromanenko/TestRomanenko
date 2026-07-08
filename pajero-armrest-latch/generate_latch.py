@@ -3,62 +3,74 @@
 Parametric generator for the Mitsubishi Pajero center-console armrest
 UPPER catch / latch (OEM ref. MR532555, fits NM..NX / Montero 2000-2021).
 
-The real OEM part dimensions are not published, so the model below is
-dimensioned from the reference photos (photo proportions + standard trim
-self-tapper sizes). Every fit-critical value is a named constant at the
-top so it can be tuned after a test print and a caliper check of the
-original part.
+Geometry v2 — modelled to match the reference photos:
+  * mounting plate with two rounded screw ears (countersunk holes)
+  * wedge-shaped central block with a hole in its sloped face
+  * wide tapered paddle (the grip lever) tilted up from the plate edge
+  * J-hook under the paddle that engages the lid striker
 
-Output: pajero_upper_latch.stl  (+ preview.png)
+Dimensions are derived from photo proportions; fit-critical values are
+parameters below — verify HOLE_SPACING and the hook geometry against the
+original part with calipers before a final print.
 
-Requires: trimesh, manifold3d, numpy, matplotlib
+Output: pajero_upper_latch.stl / .3mf + preview renders.
 """
 import numpy as np
 import trimesh
-from trimesh.creation import box, cylinder, cone
+from trimesh.creation import box, cylinder
 
 # ----------------------------------------------------------------------
-# PARAMETERS (mm)  -- measure the original and adjust these if needed
+# PARAMETERS (mm)
 # ----------------------------------------------------------------------
-# Mounting base plate (flange)
-PLATE_L      = 70.0   # length, along the screw-hole axis (X)
-PLATE_W      = 25.0   # width / depth (Y)
-PLATE_T      = 4.5    # thickness (Z)
-PLATE_FILLET = 4.0    # corner radius of the plate
+# Mounting plate (the part screwed to the console, Z-up, top face +Z)
+PLATE_L      = 70.0    # overall width (X)
+PLATE_D      = 20.0    # depth (Y), paddle hangs off the Y=0 edge
+PLATE_T      = 3.5     # thickness
+PLATE_R      = 6.0     # corner radius
 
-# Screw holes (countersunk, for ~M5 self-tappers)
-HOLE_SPACING = 56.0   # centre-to-centre distance between the two holes
-HOLE_DIA     = 5.0    # through-hole diameter
-CSK_DIA      = 9.6    # countersink top diameter
-CSK_DEPTH    = 2.6    # countersink depth from the top face
+# Screw holes in the ears
+HOLE_SPACING = 56.0    # centre-to-centre (X)
+HOLE_Y       = 12.0    # hole centre from the front (paddle) edge
+HOLE_DIA     = 5.0
+CSK_DIA      = 9.6
+CSK_DEPTH    = 2.2
 
-# Central catch body (the block rising from the plate)
-BODY_W       = 22.0   # X
-BODY_D       = 15.0   # Y
-BODY_H       = 13.0   # height above the plate (Z)
-BODY_FILLET  = 2.5
+# Central wedge block (between the ears, protrudes past the back edge)
+BLOCK_W      = 24.0    # X
+BLOCK_D      = 13.0    # Y, sits from Y=BLOCK_Y0
+BLOCK_Y0     = 8.0     # back end overhangs the plate rear edge slightly
+BLOCK_H_BACK = 13.5    # top height at the back (Z, from plate bottom)
+BLOCK_H_FRONT= 9.0     # top height at the front (sloped face)
+BLOCK_R      = 2.0
+BLOCK_HOLE_D = 5.0     # hole in the sloped face
 
-# Top button / cap with the small hole seen in the photos
-CAP_W        = 16.0
-CAP_D        = 12.0
-CAP_H        = 4.0
-CAP_HOLE_DIA = 3.2
+# Paddle (grip lever)
+PAD_W_ROOT   = 63.0    # width at the hinge edge
+PAD_W_TIP    = 54.0    # width at the free end
+PAD_LEN      = 32.0    # length along the paddle plane
+PAD_T        = 3.6     # thickness
+PAD_R        = 10.0    # corner radius (big, rounded tip like the photos)
+PAD_ANGLE    = 45.0    # tilt above the plate plane, degrees
+PAD_ROOT_Y   = 1.5     # embed of the root edge into the plate front
+PAD_ROOT_Z   = 2.2     # height of the hinge line
 
-# Forward hook (the lever that engages the lid striker)
-HOOK_W       = 14.0   # X width of the hook
-HOOK_ARM_T   = 5.0    # thickness of the horizontal arm (Z)
-HOOK_REACH   = 12.0   # how far it projects forward (+Y) past the body
-HOOK_LIP_H   = 7.0    # downward catching lip height
-HOOK_LIP_T   = 4.0    # lip thickness (Y)
-HOOK_Z       = 6.0    # height of the underside of the arm above plate
+# Catch hook: hangs from the paddle underside, curls back toward the plate
+# (visible gap between the tilted paddle and the hook bar, like photo 1)
+HOOK_W       = 14.0
+HOOK_BAR_Y   = -7.0    # Y centre of the descending bar
+HOOK_BAR_T   = 3.2     # bar thickness (Y)
+HOOK_BOT_Z   = 1.2     # bottom of the hook
+HOOK_LIP_LEN = 8.0     # lip length toward the plate (+Y)
+HOOK_LIP_T   = 3.0     # lip thickness (Z)
 
-SEG = 96  # cylinder facet count
+SEG = 96
+
 
 # ----------------------------------------------------------------------
 # Helpers
 # ----------------------------------------------------------------------
 def rounded_plate(length, width, thick, r, segments=SEG):
-    """A flat prism with rounded vertical corners (convex hull of 4 cyls)."""
+    """Flat prism with rounded vertical corners, base at z=0, centred XY."""
     hx, hy = length / 2 - r, width / 2 - r
     parts = []
     for sx in (-1, 1):
@@ -69,20 +81,19 @@ def rounded_plate(length, width, thick, r, segments=SEG):
     return trimesh.util.concatenate(parts).convex_hull
 
 
-def rounded_box(w, d, h, r, segments=48):
-    """Box with rounded vertical edges, base at z=0, centred in X/Y."""
-    return rounded_plate(w, d, h, r, segments)
+def rot_x(mesh, deg, point=(0, 0, 0)):
+    mesh.apply_transform(trimesh.transformations.rotation_matrix(
+        np.radians(deg), [1, 0, 0], point))
+    return mesh
 
 
 def countersunk_hole(x, y):
-    """Through hole + countersink cutter centred at (x, y), drilled in -Z..+Z."""
-    drill = cylinder(radius=HOLE_DIA / 2, height=PLATE_T + 6, sections=SEG)
+    from trimesh.creation import cone
+    drill = cylinder(radius=HOLE_DIA / 2, height=PLATE_T + 8, sections=SEG)
     drill.apply_translation((x, y, PLATE_T / 2))
-    # countersink: cone wide at the top face, narrowing downward
     csk = cone(radius=CSK_DIA / 2, height=CSK_DEPTH, sections=SEG)
-    # trimesh cone apex is at +height; flip so wide rim is at the top face
     csk.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
-    csk.apply_translation((x, y, PLATE_T))
+    csk.apply_translation((x, y, PLATE_T + 0.01))
     return trimesh.util.concatenate([drill, csk])
 
 
@@ -90,82 +101,102 @@ def countersunk_hole(x, y):
 # Build
 # ----------------------------------------------------------------------
 def build():
-    # --- base plate with countersunk holes ---
-    plate = rounded_plate(PLATE_L, PLATE_W, PLATE_T, PLATE_FILLET)
-    cutters = [countersunk_hole(+HOLE_SPACING / 2, 0),
-               countersunk_hole(-HOLE_SPACING / 2, 0)]
-    plate = plate.difference(trimesh.util.concatenate(cutters))
+    # --- mounting plate, front edge at Y=0, extends to Y=PLATE_D ---
+    plate = rounded_plate(PLATE_L, PLATE_D, PLATE_T, PLATE_R)
+    plate.apply_translation((0, PLATE_D / 2, 0))
+    holes = trimesh.util.concatenate([
+        countersunk_hole(+HOLE_SPACING / 2, HOLE_Y),
+        countersunk_hole(-HOLE_SPACING / 2, HOLE_Y)])
+    plate = plate.difference(holes)
 
-    # --- central catch body ---
-    body = rounded_box(BODY_W, BODY_D, BODY_H, BODY_FILLET)
-    body.apply_translation((0, 0, PLATE_T))
+    # --- central wedge block: high at the back, sloping down to the front ---
+    from shapely.geometry import Polygon
+    slope_deg = np.degrees(np.arctan2(BLOCK_H_BACK - BLOCK_H_FRONT, BLOCK_D))
+    y0, y1 = BLOCK_Y0, BLOCK_Y0 + BLOCK_D
+    prof = Polygon([(y0, 0), (y1, 0), (y1, BLOCK_H_BACK), (y0, BLOCK_H_FRONT)])
+    blk = trimesh.creation.extrude_polygon(prof, BLOCK_W)
+    # extruded along Z; remap so width goes along X: (p, q, e) -> (e, p, q)
+    T = np.array([[0, 0, 1, -BLOCK_W / 2],
+                  [1, 0, 0, 0],
+                  [0, 1, 0, 0],
+                  [0, 0, 0, 1.0]])
+    blk.apply_transform(T)
+    # hole perpendicular to the sloped face, centred on it
+    face_c = np.array([0, BLOCK_Y0 + BLOCK_D / 2,
+                       (BLOCK_H_BACK + BLOCK_H_FRONT) / 2])
+    n = np.array([0, -np.sin(np.radians(slope_deg)), np.cos(np.radians(slope_deg))])
+    drill = cylinder(radius=BLOCK_HOLE_D / 2, height=10, sections=SEG)
+    drill.apply_transform(trimesh.geometry.align_vectors([0, 0, 1], n))
+    drill.apply_translation(face_c + n * 1.0)
+    blk = blk.difference(drill)
 
-    # --- top cap / button with small hole ---
-    cap = rounded_box(CAP_W, CAP_D, CAP_H, 2.0)
-    cap.apply_translation((0, 0, PLATE_T + BODY_H))
-    cap_hole = cylinder(radius=CAP_HOLE_DIA / 2, height=CAP_H + 4, sections=SEG)
-    cap_hole.apply_translation((0, 0, PLATE_T + BODY_H + CAP_H / 2))
-    cap = cap.difference(cap_hole)
+    # --- paddle: tapered rounded plate, tilted up from the front edge ---
+    pad = rounded_plate(PAD_W_ROOT, PAD_LEN, PAD_T, PAD_R)
+    v = pad.vertices.copy()
+    # taper: full width at root edge (y=+PAD_LEN/2), narrower at tip
+    t = (PAD_LEN / 2 - v[:, 1]) / PAD_LEN          # 0 at root, 1 at tip
+    v[:, 0] *= (1 - t * (1 - PAD_W_TIP / PAD_W_ROOT))
+    pad.vertices = v
+    pad.apply_translation((0, -PAD_LEN / 2, -PAD_T / 2))  # root edge at Y=0, centred Z
+    rot_x(pad, -PAD_ANGLE)                                # tip goes -Y and +Z
+    pad.apply_translation((0, PAD_ROOT_Y, PAD_ROOT_Z + PAD_T / 2))
 
-    # --- forward hook (horizontal arm + downward catching lip) ---
-    arm_len = BODY_D / 2 + HOOK_REACH
-    arm = box((HOOK_W, arm_len, HOOK_ARM_T))
-    arm.apply_translation((0, arm_len / 2, PLATE_T + HOOK_Z + HOOK_ARM_T / 2))
+    # --- catch hook: bar descends from the paddle underside, lip curls
+    #     back toward the plate — leaves a visible gap like in photo 1 ---
+    ang = np.radians(PAD_ANGLE)
+    pad_under = PAD_ROOT_Z + (PAD_ROOT_Y - HOOK_BAR_Y) * np.tan(ang)
+    bar = box((HOOK_W, HOOK_BAR_T, pad_under - HOOK_BOT_Z + 1.5))
+    bar.apply_translation((0, HOOK_BAR_Y,
+                           (pad_under + 1.5 + HOOK_BOT_Z) / 2))
+    lip = box((HOOK_W, HOOK_LIP_LEN, HOOK_LIP_T))
+    lip.apply_translation((0, HOOK_BAR_Y - HOOK_BAR_T / 2 + HOOK_LIP_LEN / 2,
+                           HOOK_BOT_Z + HOOK_LIP_T / 2))
 
-    lip = box((HOOK_W, HOOK_LIP_T, HOOK_LIP_H))
-    lip_y = BODY_D / 2 + HOOK_REACH - HOOK_LIP_T / 2
-    lip.apply_translation((0, lip_y,
-                           PLATE_T + HOOK_Z + HOOK_ARM_T / 2 - HOOK_LIP_H / 2 + 0.5))
-
-    # rounded thumb pad on the front-top of the body for a nicer look/feel
-    pad = cylinder(radius=HOOK_W / 2, height=BODY_D * 0.7, sections=SEG)
-    pad.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0]))
-    pad.apply_translation((0, BODY_D / 2 * 0.4, PLATE_T + BODY_H))
-
-    solids = [plate, body, cap, arm, lip, pad]
-    mesh = trimesh.boolean.union(solids)
-
-    # clean up
+    mesh = trimesh.boolean.union([plate, blk, pad, bar, lip])
     mesh.merge_vertices()
-    mesh.remove_duplicate_faces() if hasattr(mesh, "remove_duplicate_faces") else None
     mesh.fix_normals()
     return mesh
 
 
-def preview(mesh, path):
+def render(mesh, path, views):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-    fig = plt.figure(figsize=(7, 6))
-    ax = fig.add_subplot(111, projection="3d")
-    tris = mesh.triangles
-    coll = Poly3DCollection(tris, alpha=1.0, facecolor=(0.18, 0.18, 0.2),
-                            edgecolor=(0.05, 0.05, 0.05), linewidths=0.15)
-    ax.add_collection3d(coll)
-    b = mesh.bounds
-    ctr = mesh.centroid
-    span = (b[1] - b[0]).max() / 2 * 1.1
-    ax.set_xlim(ctr[0] - span, ctr[0] + span)
-    ax.set_ylim(ctr[1] - span, ctr[1] + span)
-    ax.set_zlim(ctr[2] - span, ctr[2] + span)
-    ax.set_box_aspect((1, 1, 1))
-    ax.view_init(elev=22, azim=-58)
-    ax.set_xlabel("X"); ax.set_ylabel("Y"); ax.set_zlabel("Z")
-    ax.set_title("Pajero upper console latch (MR532555) — replica")
+    fig = plt.figure(figsize=(6 * len(views), 6))
+    for i, (elev, azim, title) in enumerate(views, 1):
+        ax = fig.add_subplot(1, len(views), i, projection="3d")
+        coll = Poly3DCollection(mesh.triangles, facecolor=(0.2, 0.2, 0.22),
+                                edgecolor=(0.05, 0.05, 0.05), linewidths=0.1)
+        ax.add_collection3d(coll)
+        b, c = mesh.bounds, mesh.centroid
+        span = (b[1] - b[0]).max() / 2 * 1.05
+        ax.set_xlim(c[0] - span, c[0] + span)
+        ax.set_ylim(c[1] - span, c[1] + span)
+        ax.set_zlim(c[2] - span, c[2] + span)
+        ax.set_box_aspect((1, 1, 1))
+        ax.view_init(elev=elev, azim=azim)
+        ax.set_title(title)
+        ax.set_axis_off()
     plt.tight_layout()
-    plt.savefig(path, dpi=130)
-    print(f"wrote {path}")
+    plt.savefig(path, dpi=110)
+    print("wrote", path)
 
 
 if __name__ == "__main__":
     m = build()
     print("watertight:", m.is_watertight)
-    print("volume (mm^3): %.1f" % m.volume)
     bb = m.bounds
-    print("bounding box (mm): %.1f x %.1f x %.1f" %
-          tuple(bb[1] - bb[0]))
+    print("bbox (mm): %.1f x %.1f x %.1f" % tuple(bb[1] - bb[0]))
     m.export("pajero_upper_latch.stl")
-    print("wrote pajero_upper_latch.stl")
-    preview(m, "preview.png")
+    ex = m.copy()
+    ex.apply_translation(-ex.centroid)
+    ex.apply_translation((0, 0, ex.centroid[2] - ex.bounds[0][2]))
+    ex.units = "mm"
+    ex.export("pajero_upper_latch.3mf")
+    print("wrote STL + 3MF")
+    render(m, "preview.png",
+           [(28, -55, "angled (like photo 1)"),
+            (85, -90, "front/top (like photo 2)"),
+            (5, -90, "side profile")])
