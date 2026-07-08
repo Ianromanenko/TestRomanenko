@@ -14,7 +14,11 @@
 $fn = 96;
 
 /* [Mounting plate] */
-PLATE_L      = 70.0;
+// Asymmetric flange: one screw ear long, the other short.
+// Set MIRROR = true if the printed part comes out reversed for your console.
+MIRROR       = false;
+EAR_LONG     = 13.0;   // long ear overhang past the hole (X)
+EAR_SHORT    = 6.0;    // short ear overhang past the hole (X)
 PLATE_D      = 20.0;
 PLATE_T      = 3.5;
 PLATE_R      = 6.0;
@@ -70,10 +74,13 @@ slope = atan2(BLOCK_H_BACK - BLOCK_H_FRONT, BLOCK_D);
 
 module latch() {
     union() {
-        // mounting plate, front edge at Y=0
+        // mounting plate, front edge at Y=0, asymmetric ears
+        // long ear on -X, short ear on +X
+        x_left  = -(HOLE_SPACING/2 + EAR_LONG);
+        x_right =  (HOLE_SPACING/2 + EAR_SHORT);
         difference() {
-            translate([0, PLATE_D/2, 0])
-                rrect(PLATE_L, PLATE_D, PLATE_T, PLATE_R);
+            translate([(x_left + x_right)/2, PLATE_D/2, 0])
+                rrect(x_right - x_left, PLATE_D, PLATE_T, PLATE_R);
             countersink( HOLE_SPACING/2);
             countersink(-HOLE_SPACING/2);
         }
@@ -114,4 +121,5 @@ module polygon_paddle() {
     }
 }
 
-latch();
+if (MIRROR) mirror([1, 0, 0]) latch();
+else latch();

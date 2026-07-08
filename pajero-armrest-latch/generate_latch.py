@@ -23,12 +23,18 @@ from trimesh.creation import box, cylinder
 # PARAMETERS (mm)
 # ----------------------------------------------------------------------
 # Mounting plate (the part screwed to the console, Z-up, top face +Z)
-PLATE_L      = 70.0    # overall width (X)
+# The flange is ASYMMETRIC: one screw ear is long, the other short.
+# EAR_LONG / EAR_SHORT are the plate overhang past each hole centre.
+# MIRROR swaps which side is long (set True if the printed part comes
+# out reversed for your console).
+MIRROR       = False
+EAR_LONG     = 13.0    # long ear: plate overhang past the hole (X)
+EAR_SHORT    = 6.0     # short ear: plate overhang past the hole (X)
 PLATE_D      = 20.0    # depth (Y), paddle hangs off the Y=0 edge
 PLATE_T      = 3.5     # thickness
 PLATE_R      = 6.0     # corner radius
 
-# Screw holes in the ears
+# Screw holes in the ears (holes stay symmetric about the catch centre)
 HOLE_SPACING = 56.0    # centre-to-centre (X)
 HOLE_Y       = 12.0    # hole centre from the front (paddle) edge
 HOLE_DIA     = 5.0
@@ -81,6 +87,18 @@ def rounded_plate(length, width, thick, r, segments=SEG):
     return trimesh.util.concatenate(parts).convex_hull
 
 
+def rounded_plate_x(x_min, x_max, width, thick, r, segments=SEG):
+    """Rounded prism spanning [x_min, x_max] in X, centred in Y, base z=0."""
+    hy = width / 2 - r
+    parts = []
+    for cx in (x_min + r, x_max - r):
+        for sy in (-1, 1):
+            c = cylinder(radius=r, height=thick, sections=segments)
+            c.apply_translation((cx, sy * hy, thick / 2))
+            parts.append(c)
+    return trimesh.util.concatenate(parts).convex_hull
+
+
 def rot_x(mesh, deg, point=(0, 0, 0)):
     mesh.apply_transform(trimesh.transformations.rotation_matrix(
         np.radians(deg), [1, 0, 0], point))
@@ -101,8 +119,11 @@ def countersunk_hole(x, y):
 # Build
 # ----------------------------------------------------------------------
 def build():
-    # --- mounting plate, front edge at Y=0, extends to Y=PLATE_D ---
-    plate = rounded_plate(PLATE_L, PLATE_D, PLATE_T, PLATE_R)
+    # --- mounting plate, front edge at Y=0, asymmetric ears ---
+    # holes at +/-HOLE_SPACING/2; long ear on -X, short ear on +X (MIRROR flips)
+    x_left  = -(HOLE_SPACING / 2 + EAR_LONG)
+    x_right =  (HOLE_SPACING / 2 + EAR_SHORT)
+    plate = rounded_plate_x(x_left, x_right, PLATE_D, PLATE_T, PLATE_R)
     plate.apply_translation((0, PLATE_D / 2, 0))
     holes = trimesh.util.concatenate([
         countersunk_hole(+HOLE_SPACING / 2, HOLE_Y),
@@ -153,6 +174,9 @@ def build():
                            HOOK_BOT_Z + HOOK_LIP_T / 2))
 
     mesh = trimesh.boolean.union([plate, blk, pad, bar, lip])
+    if MIRROR:
+        mesh.apply_scale((-1, 1, 1))   # swap long/short ear
+        mesh.fix_normals()
     mesh.merge_vertices()
     mesh.fix_normals()
     return mesh
@@ -184,19 +208,37 @@ def render(mesh, path, views):
     print("wrote", path)
 
 
-if __name__ == "__main__":
-    m = build()
-    print("watertight:", m.is_watertight)
-    bb = m.bounds
-    print("bbox (mm): %.1f x %.1f x %.1f" % tuple(bb[1] - bb[0]))
-    m.export("pajero_upper_latch.stl")
-    ex = m.copy()
-    ex.apply_translation(-ex.centroid)
-    ex.apply_translation((0, 0, ex.centroid[2] - ex.bounds[0][2]))
+def export_on_bed(mesh, stem):
+    """Export STL + 3MF, centred in XY and resting flange on the bed."""
+    mesh.export(stem + ".stl")
+    ex = mesh.copy()
+    ex.apply_translation((-(ex.bounds[0][0] + ex.bounds[1][0]) / 2,
+                          -(ex.bounds[0][1] + ex.bounds[1][1]) / 2,
+                          -ex.bounds[0][2]))
     ex.units = "mm"
-    ex.export("pajero_upper_latch.3mf")
-    print("wrote STL + 3MF")
-    render(m, "preview.png",
-           [(28, -55, "angled (like photo 1)"),
-            (85, -90, "front/top (like photo 2)"),
-            (5, -90, "side profile")])
+    ex.export(stem + ".3mf")
+
+
+if __name__ == "__main__":
+    import generate_latch as G   # allow flipping the module-level MIRROR flag
+
+    G.MIRROR = False
+    a = build()
+    G.MIRROR = True
+    b = build()
+
+    for name, m in (("A (long ear LEFT)", a), ("B (long ear RIGHT)", b)):
+        print(name, "watertight:", m.is_watertight,
+              "bbox: %.1f x %.1f x %.1f" % tuple(m.bounds[1] - m.bounds[0]))
+
+    export_on_bed(a, "pajero_upper_latch_A")
+    export_on_bed(b, "pajero_upper_latch_B_mirror")
+    # keep the default filename pointing at variant A
+    export_on_bed(a, "pajero_upper_latch")
+    print("wrote A + B (mirror) STL + 3MF")
+
+    # top-down previews so the ear asymmetry is obvious
+    render(a, "preview_A.png",
+           [(90, -90, "A: top view"), (25, -60, "A: angled")])
+    render(b, "preview_B.png",
+           [(90, -90, "B (mirror): top view"), (25, -60, "B: angled")])
