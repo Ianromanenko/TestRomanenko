@@ -3,3 +3,5 @@ mesh_data.json
 mesh_v.txt
 mesh_f.txt
 scene.js
+__pycache__/
+*.pyc
