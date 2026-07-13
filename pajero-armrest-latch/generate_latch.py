@@ -1,73 +1,70 @@
 #!/usr/bin/env python3
 """
-Parametric generator for the Mitsubishi Pajero center-console armrest
+Parametric generator (v3) for the Mitsubishi Pajero center-console armrest
 UPPER catch / latch (OEM ref. MR532555, fits NM..NX / Montero 2000-2021).
 
-Geometry v2 — modelled to match the reference photos:
-  * mounting plate with two rounded screw ears (countersunk holes)
-  * wedge-shaped central block with a hole in its sloped face
-  * wide tapered paddle (the grip lever) tilted up from the plate edge
-  * J-hook under the paddle that engages the lid striker
+v3 is re-derived from scratch against the user's reference photos, matching:
+  C1 thin mounting flange (flat strip)
+  C2 two countersunk screw holes near the flange ends
+  C3 central raised square boss with a hole on top
+  C4 large rounded/domed textured "hood" body rising from the flange edge
+  C5 hood reads trapezoidal/rounded from the front
+  C6 hook / catch on the underside near the boss
+  C7 watertight, mm-scale, flange-on-bed printable
 
-Dimensions are derived from photo proportions; fit-critical values are
-parameters below — verify HOLE_SPACING and the hook geometry against the
-original part with calipers before a final print.
-
-Output: pajero_upper_latch.stl / .3mf + preview renders.
+Fit-critical values are parameters. MIRROR flips the (optionally) asymmetric
+ears. Outputs STL + 3MF (A and mirror B) and photo-angle previews.
 """
 import numpy as np
 import trimesh
-from trimesh.creation import box, cylinder
+from trimesh.creation import box, cylinder, cone
+from shapely.geometry import Polygon
 
 # ----------------------------------------------------------------------
 # PARAMETERS (mm)
 # ----------------------------------------------------------------------
-# Mounting plate (the part screwed to the console, Z-up, top face +Z)
-# The flange is ASYMMETRIC: one screw ear is long, the other short.
-# EAR_LONG / EAR_SHORT are the plate overhang past each hole centre.
-# MIRROR swaps which side is long (set True if the printed part comes
-# out reversed for your console).
 MIRROR       = False
-EAR_LONG     = 13.0    # long ear: plate overhang past the hole (X)
-EAR_SHORT    = 6.0     # short ear: plate overhang past the hole (X)
-PLATE_D      = 20.0    # depth (Y), paddle hangs off the Y=0 edge
-PLATE_T      = 3.5     # thickness
-PLATE_R      = 6.0     # corner radius
 
-# Screw holes in the ears (holes stay symmetric about the catch centre)
-HOLE_SPACING = 56.0    # centre-to-centre (X)
-HOLE_Y       = 12.0    # hole centre from the front (paddle) edge
-HOLE_DIA     = 5.0
-CSK_DIA      = 9.6
-CSK_DEPTH    = 2.2
+# --- Scale anchored to the real OEM part (research): MR532555 upper catch
+#     is ~47 x 34 x 29 mm, hole-to-hole ~35 mm, ~15 g (black plastic). ---
 
-# Central wedge block (between the ears, protrudes past the back edge)
-BLOCK_W      = 24.0    # X
-BLOCK_D      = 13.0    # Y, sits from Y=BLOCK_Y0
-BLOCK_Y0     = 8.0     # back end overhangs the plate rear edge slightly
-BLOCK_H_BACK = 13.5    # top height at the back (Z, from plate bottom)
-BLOCK_H_FRONT= 9.0     # top height at the front (sloped face)
-BLOCK_R      = 2.0
-BLOCK_HOLE_D = 5.0     # hole in the sloped face
+# Mounting flange (flat strip, Z-up, top face +Z)
+FLANGE_D     = 16.0    # depth (Y); hood cantilevers off the +Y edge
+FLANGE_T     = 3.5     # thickness
+FLANGE_R     = 3.0     # corner radius
+EAR_LONG     = 6.0     # plate overhang past hole on the long side
+EAR_SHORT    = 6.0     # ... short side (equal by default -> symmetric)
 
-# Paddle (grip lever)
-PAD_W_ROOT   = 63.0    # width at the hinge edge
-PAD_W_TIP    = 54.0    # width at the free end
-PAD_LEN      = 32.0    # length along the paddle plane
-PAD_T        = 3.6     # thickness
-PAD_R        = 10.0    # corner radius (big, rounded tip like the photos)
-PAD_ANGLE    = 45.0    # tilt above the plate plane, degrees
-PAD_ROOT_Y   = 1.5     # embed of the root edge into the plate front
-PAD_ROOT_Z   = 2.2     # height of the hinge line
+# Countersunk screw holes
+HOLE_SPACING = 35.0    # centre-to-centre (X)  -> width ~47 mm with ears
+HOLE_Y       = 8.0     # from the flange back edge (Y)
+HOLE_DIA     = 4.6
+CSK_DIA      = 8.0
+CSK_DEPTH    = 2.0
 
-# Catch hook: hangs from the paddle underside, curls back toward the plate
-# (visible gap between the tilted paddle and the hook bar, like photo 1)
-HOOK_W       = 14.0
-HOOK_BAR_Y   = -7.0    # Y centre of the descending bar
-HOOK_BAR_T   = 3.2     # bar thickness (Y)
-HOOK_BOT_Z   = 1.2     # bottom of the hook
-HOOK_LIP_LEN = 8.0     # lip length toward the plate (+Y)
-HOOK_LIP_T   = 3.0     # lip thickness (Z)
+# Central square boss with a hole on top
+BOSS_W       = 12.0
+BOSS_D       = 9.0
+BOSS_H       = 5.0     # above the flange top
+BOSS_R       = 1.6
+BOSS_HOLE_D  = 4.5
+
+# Domed "hood" body (the big rounded grip that rises off the flange)
+HOOD_W       = 34.0    # width (X) — leaves the screw ears exposed
+HOOD_H       = 30.0    # height along its own plane
+HOOD_TH      = 12.0    # thickness (through the shield)
+HOOD_R       = 7.0     # outline corner radius
+HOOD_TILT    = 16.0    # tilt back from vertical, degrees
+HOOD_DOME_R  = 58.0    # front-face bulge radius (bigger = flatter)
+HOOD_TAPER   = 0.82    # bottom width / top width (trapezoid)
+
+# Hook / catch under the hood, curling back toward the flange
+HOOK_W       = 12.0
+HOOK_BAR_Y   = 4.0     # bar centre (Y), in front of the boss
+HOOK_BAR_T   = 3.0
+HOOK_BOT_Z   = 0.9
+HOOK_LIP_LEN = 6.5
+HOOK_LIP_T   = 2.6
 
 SEG = 96
 
@@ -75,28 +72,28 @@ SEG = 96
 # ----------------------------------------------------------------------
 # Helpers
 # ----------------------------------------------------------------------
-def rounded_plate(length, width, thick, r, segments=SEG):
-    """Flat prism with rounded vertical corners, base at z=0, centred XY."""
-    hx, hy = length / 2 - r, width / 2 - r
-    parts = []
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            c = cylinder(radius=r, height=thick, sections=segments)
-            c.apply_translation((sx * hx, sy * hy, thick / 2))
-            parts.append(c)
-    return trimesh.util.concatenate(parts).convex_hull
-
-
-def rounded_plate_x(x_min, x_max, width, thick, r, segments=SEG):
-    """Rounded prism spanning [x_min, x_max] in X, centred in Y, base z=0."""
-    hy = width / 2 - r
+def rounded_plate_x(x_min, x_max, y_min, y_max, thick, r, segments=SEG):
+    """Rounded prism spanning [x_min,x_max] x [y_min,y_max], base at z=0."""
     parts = []
     for cx in (x_min + r, x_max - r):
-        for sy in (-1, 1):
+        for cy in (y_min + r, y_max - r):
             c = cylinder(radius=r, height=thick, sections=segments)
-            c.apply_translation((cx, sy * hy, thick / 2))
+            c.apply_translation((cx, cy, thick / 2))
             parts.append(c)
     return trimesh.util.concatenate(parts).convex_hull
+
+
+def rounded_box(w, d, h, r, segments=48):
+    return rounded_plate_x(-w / 2, w / 2, -d / 2, d / 2, h, r, segments)
+
+
+def countersunk_hole(x, y):
+    drill = cylinder(radius=HOLE_DIA / 2, height=FLANGE_T + 8, sections=SEG)
+    drill.apply_translation((x, y, FLANGE_T / 2))
+    csk = cone(radius=CSK_DIA / 2, height=CSK_DEPTH, sections=SEG)
+    csk.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
+    csk.apply_translation((x, y, FLANGE_T + 0.01))
+    return trimesh.util.concatenate([drill, csk])
 
 
 def rot_x(mesh, deg, point=(0, 0, 0)):
@@ -105,111 +102,101 @@ def rot_x(mesh, deg, point=(0, 0, 0)):
     return mesh
 
 
-def countersunk_hole(x, y):
-    from trimesh.creation import cone
-    drill = cylinder(radius=HOLE_DIA / 2, height=PLATE_T + 8, sections=SEG)
-    drill.apply_translation((x, y, PLATE_T / 2))
-    csk = cone(radius=CSK_DIA / 2, height=CSK_DEPTH, sections=SEG)
-    csk.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
-    csk.apply_translation((x, y, PLATE_T + 0.01))
-    return trimesh.util.concatenate([drill, csk])
+def build_hood():
+    """A rounded trapezoidal shield, front face domed, built lying then tilted.
+    Local frame: X width, Y through-thickness, Z height; base at Z=0."""
+    # trapezoid outline in X-Z, extruded through Y
+    wt, wb = HOOD_W / 2, HOOD_W / 2 * HOOD_TAPER
+    r = HOOD_R
+    # rounded trapezoid via hull of 4 corner circles (in X-Z plane)
+    circ = []
+    for (cx, cz) in [(-wb + r, r), (wb - r, r),
+                     (-wt + r, HOOD_H - r), (wt - r, HOOD_H - r)]:
+        c = cylinder(radius=r, height=HOOD_TH, sections=64)
+        c.apply_transform(trimesh.transformations.rotation_matrix(np.pi/2, [1, 0, 0]))
+        c.apply_translation((cx, 0, cz))
+        circ.append(c)
+    shield = trimesh.util.concatenate(circ).convex_hull
+    # dome the front (+Y) face: subtract everything outside a big cylinder
+    dome = cylinder(radius=HOOD_DOME_R, height=HOOD_W + 20, sections=192)
+    dome.apply_transform(trimesh.transformations.rotation_matrix(np.pi/2, [0, 1, 0]))
+    dome.apply_translation((0, HOOD_TH / 2 - HOOD_DOME_R, HOOD_H / 2))
+    shield = shield.intersection(dome)
+    return shield
 
 
 # ----------------------------------------------------------------------
 # Build
 # ----------------------------------------------------------------------
 def build():
-    # --- mounting plate, front edge at Y=0, asymmetric ears ---
-    # holes at +/-HOLE_SPACING/2; long ear on -X, short ear on +X (MIRROR flips)
-    x_left  = -(HOLE_SPACING / 2 + EAR_LONG)
-    x_right =  (HOLE_SPACING / 2 + EAR_SHORT)
-    plate = rounded_plate_x(x_left, x_right, PLATE_D, PLATE_T, PLATE_R)
-    plate.apply_translation((0, PLATE_D / 2, 0))
+    # --- flange (asymmetric-capable) with countersunk holes ---
+    x_left = -(HOLE_SPACING / 2 + EAR_LONG)
+    x_right = (HOLE_SPACING / 2 + EAR_SHORT)
+    flange = rounded_plate_x(x_left, x_right, 0, FLANGE_D, FLANGE_T, FLANGE_R)
     holes = trimesh.util.concatenate([
         countersunk_hole(+HOLE_SPACING / 2, HOLE_Y),
         countersunk_hole(-HOLE_SPACING / 2, HOLE_Y)])
-    plate = plate.difference(holes)
+    flange = flange.difference(holes)
 
-    # --- central wedge block: high at the back, sloping down to the front ---
-    from shapely.geometry import Polygon
-    slope_deg = np.degrees(np.arctan2(BLOCK_H_BACK - BLOCK_H_FRONT, BLOCK_D))
-    y0, y1 = BLOCK_Y0, BLOCK_Y0 + BLOCK_D
-    prof = Polygon([(y0, 0), (y1, 0), (y1, BLOCK_H_BACK), (y0, BLOCK_H_FRONT)])
-    blk = trimesh.creation.extrude_polygon(prof, BLOCK_W)
-    # extruded along Z; remap so width goes along X: (p, q, e) -> (e, p, q)
-    T = np.array([[0, 0, 1, -BLOCK_W / 2],
-                  [1, 0, 0, 0],
-                  [0, 1, 0, 0],
-                  [0, 0, 0, 1.0]])
-    blk.apply_transform(T)
-    # hole perpendicular to the sloped face, centred on it
-    face_c = np.array([0, BLOCK_Y0 + BLOCK_D / 2,
-                       (BLOCK_H_BACK + BLOCK_H_FRONT) / 2])
-    n = np.array([0, -np.sin(np.radians(slope_deg)), np.cos(np.radians(slope_deg))])
-    drill = cylinder(radius=BLOCK_HOLE_D / 2, height=10, sections=SEG)
-    drill.apply_transform(trimesh.geometry.align_vectors([0, 0, 1], n))
-    drill.apply_translation(face_c + n * 1.0)
-    blk = blk.difference(drill)
+    # --- central boss with a hole, seated behind the hood (visible) ---
+    boss_y = FLANGE_D - BOSS_D / 2 - 1.0
+    boss = rounded_box(BOSS_W, BOSS_D, BOSS_H, BOSS_R)
+    boss.apply_translation((0, boss_y, FLANGE_T))
+    bhole = cylinder(radius=BOSS_HOLE_D / 2, height=BOSS_H + 4, sections=SEG)
+    bhole.apply_translation((0, boss_y, FLANGE_T + BOSS_H - 2))
+    boss = boss.difference(bhole)
 
-    # --- paddle: tapered rounded plate, tilted up from the front edge ---
-    pad = rounded_plate(PAD_W_ROOT, PAD_LEN, PAD_T, PAD_R)
-    v = pad.vertices.copy()
-    # taper: full width at root edge (y=+PAD_LEN/2), narrower at tip
-    t = (PAD_LEN / 2 - v[:, 1]) / PAD_LEN          # 0 at root, 1 at tip
-    v[:, 0] *= (1 - t * (1 - PAD_W_TIP / PAD_W_ROOT))
-    pad.vertices = v
-    pad.apply_translation((0, -PAD_LEN / 2, -PAD_T / 2))  # root edge at Y=0, centred Z
-    rot_x(pad, -PAD_ANGLE)                                # tip goes -Y and +Z
-    pad.apply_translation((0, PAD_ROOT_Y, PAD_ROOT_Z + PAD_T / 2))
+    # --- domed hood: already built vertical (height along Z); tilt back a
+    #     little and seat its base on the front part of the flange ---
+    hood = build_hood()
+    rot_x(hood, HOOD_TILT)                 # lean back over the flange
+    hood.apply_translation((0, 3.0, FLANGE_T - 0.5))
 
-    # --- catch hook: bar descends from the paddle underside, lip curls
-    #     back toward the plate — leaves a visible gap like in photo 1 ---
-    ang = np.radians(PAD_ANGLE)
-    pad_under = PAD_ROOT_Z + (PAD_ROOT_Y - HOOK_BAR_Y) * np.tan(ang)
-    bar = box((HOOK_W, HOOK_BAR_T, pad_under - HOOK_BOT_Z + 1.5))
-    bar.apply_translation((0, HOOK_BAR_Y,
-                           (pad_under + 1.5 + HOOK_BOT_Z) / 2))
+    # --- hook / catch under the hood ---
+    bar_top = FLANGE_T + 9.0
+    bar = box((HOOK_W, HOOK_BAR_T, bar_top - HOOK_BOT_Z))
+    bar.apply_translation((0, HOOK_BAR_Y, (bar_top + HOOK_BOT_Z) / 2))
     lip = box((HOOK_W, HOOK_LIP_LEN, HOOK_LIP_T))
     lip.apply_translation((0, HOOK_BAR_Y - HOOK_BAR_T / 2 + HOOK_LIP_LEN / 2,
                            HOOK_BOT_Z + HOOK_LIP_T / 2))
 
-    mesh = trimesh.boolean.union([plate, blk, pad, bar, lip])
+    mesh = trimesh.boolean.union([flange, boss, hood, bar, lip])
     if MIRROR:
-        mesh.apply_scale((-1, 1, 1))   # swap long/short ear
-        mesh.fix_normals()
+        mesh.apply_scale((-1, 1, 1))
     mesh.merge_vertices()
     mesh.fix_normals()
     return mesh
 
 
-def render(mesh, path, views):
+# ----------------------------------------------------------------------
+# Render harness (mimics the three reference photo angles)
+# ----------------------------------------------------------------------
+def render(mesh, path, views, ncols=3):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-
-    fig = plt.figure(figsize=(6 * len(views), 6))
+    fig = plt.figure(figsize=(5.2 * ncols, 5))
     for i, (elev, azim, title) in enumerate(views, 1):
-        ax = fig.add_subplot(1, len(views), i, projection="3d")
-        coll = Poly3DCollection(mesh.triangles, facecolor=(0.2, 0.2, 0.22),
-                                edgecolor=(0.05, 0.05, 0.05), linewidths=0.1)
-        ax.add_collection3d(coll)
+        ax = fig.add_subplot(1, ncols, i, projection="3d")
+        ax.add_collection3d(Poly3DCollection(
+            mesh.triangles, facecolor=(0.17, 0.17, 0.19),
+            edgecolor=(0.05, 0.05, 0.05), linewidths=0.08))
         b, c = mesh.bounds, mesh.centroid
-        span = (b[1] - b[0]).max() / 2 * 1.05
-        ax.set_xlim(c[0] - span, c[0] + span)
-        ax.set_ylim(c[1] - span, c[1] + span)
-        ax.set_zlim(c[2] - span, c[2] + span)
+        s = (b[1] - b[0]).max() / 2 * 1.05
+        ax.set_xlim(c[0] - s, c[0] + s)
+        ax.set_ylim(c[1] - s, c[1] + s)
+        ax.set_zlim(c[2] - s, c[2] + s)
         ax.set_box_aspect((1, 1, 1))
         ax.view_init(elev=elev, azim=azim)
-        ax.set_title(title)
+        ax.set_title(title, fontsize=12)
         ax.set_axis_off()
     plt.tight_layout()
-    plt.savefig(path, dpi=110)
+    plt.savefig(path, dpi=115)
     print("wrote", path)
 
 
 def export_on_bed(mesh, stem):
-    """Export STL + 3MF, centred in XY and resting flange on the bed."""
     mesh.export(stem + ".stl")
     ex = mesh.copy()
     ex.apply_translation((-(ex.bounds[0][0] + ex.bounds[1][0]) / 2,
@@ -219,26 +206,40 @@ def export_on_bed(mesh, stem):
     ex.export(stem + ".3mf")
 
 
+def self_check(mesh):
+    """Quantitative acceptance checks -> printed report."""
+    bb = mesh.bounds
+    dims = bb[1] - bb[0]
+    vol = mesh.volume / 1000.0
+    # targets from OEM research: ~47 x 34 x 29 mm, ~15 g
+    checks = {
+        "watertight": mesh.is_watertight,
+        "winding_consistent": mesh.is_winding_consistent,
+        "width 42-52mm (OEM ~47)": 42 <= dims[0] <= 52,
+        "depth 24-34mm (OEM ~29)": 24 <= dims[1] <= 34,
+        "height 28-38mm (OEM ~34)": 28 <= dims[2] <= 38,
+        "mass 8-24g PETG (OEM ~15)": 8 <= vol * 1.27 <= 24,
+    }
+    print("=== SELF-CHECK ===")
+    print("bbox mm: %.1f x %.1f x %.1f | vol %.1f cm3 | ~%.1f g PETG"
+          % (*dims, vol, vol * 1.27))
+    for k, v in checks.items():
+        print(("  [PASS] " if v else "  [FAIL] ") + k)
+    return all(checks.values())
+
+
 if __name__ == "__main__":
-    import generate_latch as G   # allow flipping the module-level MIRROR flag
-
+    import generate_latch as G
     G.MIRROR = False
-    a = build()
+    m = build()
+    ok = self_check(m)
+    export_on_bed(m, "pajero_upper_latch_A")
+    export_on_bed(m, "pajero_upper_latch")
     G.MIRROR = True
-    b = build()
-
-    for name, m in (("A (long ear LEFT)", a), ("B (long ear RIGHT)", b)):
-        print(name, "watertight:", m.is_watertight,
-              "bbox: %.1f x %.1f x %.1f" % tuple(m.bounds[1] - m.bounds[0]))
-
-    export_on_bed(a, "pajero_upper_latch_A")
-    export_on_bed(b, "pajero_upper_latch_B_mirror")
-    # keep the default filename pointing at variant A
-    export_on_bed(a, "pajero_upper_latch")
-    print("wrote A + B (mirror) STL + 3MF")
-
-    # top-down previews so the ear asymmetry is obvious
-    render(a, "preview_A.png",
-           [(90, -90, "A: top view"), (25, -60, "A: angled")])
-    render(b, "preview_B.png",
-           [(90, -90, "B (mirror): top view"), (25, -60, "B: angled")])
+    mb = build()
+    export_on_bed(mb, "pajero_upper_latch_B_mirror")
+    render(m, "preview.png",
+           [(22, -60, "3/4 view (cf IMG_3295)"),
+            (12, -90, "front (cf IMG_3294)"),
+            (6, 0, "side profile")])
+    print("ALL CHECKS PASS" if ok else "*** CHECKS FAILED ***")

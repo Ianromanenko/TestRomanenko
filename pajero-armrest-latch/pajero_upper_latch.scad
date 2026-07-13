@@ -1,125 +1,64 @@
-// Mitsubishi Pajero center-console armrest UPPER catch / latch
-// OEM ref. MR532555 (fits Pajero/Montero NM..NX, 2000-2021)
+// ---------------------------------------------------------------------------
+// Mitsubishi Pajero center-console armrest UPPER catch / latch  (OEM MR532555)
 //
-// Geometry v2, matched to the reference photos:
-//   * mounting plate with two countersunk screw holes
-//   * wedge-shaped central block with a hole in its sloped face
-//   * wide tapered paddle (grip lever) tilted up from the plate edge
-//   * catch hook hanging from the paddle underside
+// NOTE ON SOURCE OF TRUTH
+// The printable geometry (v3) is generated and VERIFIED by generate_latch.py
+// (Python + trimesh): the domed "hood" uses a boolean intersection that is
+// checked for watertightness and against OEM-anchored dimensions on every run.
+// This environment has no OpenSCAD renderer, so rather than ship an unverified
+// port, the authoritative model lives in the Python generator and the exported
+// STL/3MF files. The block below documents the parameters so you can tweak and
+// regenerate:  python3 generate_latch.py
 //
-// OEM dimensions are unpublished; verify HOLE_SPACING and the hook
-// against the original with calipers, then re-export.
-// Units: mm. Render: F6, then Export as STL.
+// Real OEM part (from research): ~47 x 34 x 29 mm, hole-to-hole ~35 mm, ~15 g.
+// ---------------------------------------------------------------------------
 
-$fn = 96;
+/* [Reference parameters — edit in generate_latch.py] */
+MIRROR       = false;  // flip long/short screw ear if the part comes out reversed
 
-/* [Mounting plate] */
-// Asymmetric flange: one screw ear long, the other short.
-// Set MIRROR = true if the printed part comes out reversed for your console.
-MIRROR       = false;
-EAR_LONG     = 13.0;   // long ear overhang past the hole (X)
-EAR_SHORT    = 6.0;    // short ear overhang past the hole (X)
-PLATE_D      = 20.0;
-PLATE_T      = 3.5;
-PLATE_R      = 6.0;
+// Mounting flange
+FLANGE_D     = 16.0;   // depth (Y)
+FLANGE_T     = 3.5;    // thickness
+FLANGE_R     = 3.0;    // corner radius
+EAR_LONG     = 6.0;    // overhang past hole (long side)
+EAR_SHORT    = 6.0;    // overhang past hole (short side)
 
-/* [Screw holes] */
-HOLE_SPACING = 56.0;
-HOLE_Y       = 12.0;
-HOLE_DIA     = 5.0;
-CSK_DIA      = 9.6;
-CSK_DEPTH    = 2.2;
+// Countersunk screw holes  (width = HOLE_SPACING + EAR_LONG + EAR_SHORT ~= 47)
+HOLE_SPACING = 35.0;   // centre-to-centre (X)
+HOLE_Y       = 8.0;    // from the flange back edge (Y)
+HOLE_DIA     = 4.6;
+CSK_DIA      = 8.0;
+CSK_DEPTH    = 2.0;
 
-/* [Central wedge block] */
-BLOCK_W       = 24.0;
-BLOCK_D       = 13.0;
-BLOCK_Y0      = 8.0;
-BLOCK_H_BACK  = 13.5;
-BLOCK_H_FRONT = 9.0;
-BLOCK_R       = 2.0;
-BLOCK_HOLE_D  = 5.0;
+// Central boss (with hole)
+BOSS_W       = 12.0;
+BOSS_D       = 9.0;
+BOSS_H       = 5.0;
+BOSS_HOLE_D  = 4.5;
 
-/* [Paddle] */
-PAD_W_ROOT = 63.0;
-PAD_W_TIP  = 54.0;
-PAD_LEN    = 32.0;
-PAD_T      = 3.6;
-PAD_R      = 10.0;
-PAD_ANGLE  = 45.0;
-PAD_ROOT_Y = 1.5;
-PAD_ROOT_Z = 2.2;
+// Domed hood
+HOOD_W       = 34.0;   // width (X)
+HOOD_H       = 30.0;   // height along its plane
+HOOD_TH      = 12.0;   // thickness
+HOOD_R       = 7.0;    // corner radius
+HOOD_TILT    = 16.0;   // back-tilt, degrees
+HOOD_DOME_R  = 58.0;   // front-face bulge radius
+HOOD_TAPER   = 0.82;   // bottom/top width
 
-/* [Catch hook] */
-HOOK_W       = 14.0;
-HOOK_BAR_Y   = -7.0;
-HOOK_BAR_T   = 3.2;
-HOOK_BOT_Z   = 1.2;
-HOOK_LIP_LEN = 8.0;
-HOOK_LIP_T   = 3.0;
+// Hook / catch
+HOOK_W       = 12.0;
+HOOK_BAR_Y   = 4.0;
+HOOK_BAR_T   = 3.0;
+HOOK_LIP_LEN = 6.5;
+HOOK_LIP_T   = 2.6;
 
-module rrect(l, w, h, r) {
-    linear_extrude(height = h)
-        offset(r = r) offset(r = -r)
-            square([l, w], center = true);
+// Rough placeholder so this file still previews *something* in OpenSCAD.
+// (Not the real geometry — see generate_latch.py / the exported STL.)
+color("gray") {
+    translate([0, FLANGE_D/2, FLANGE_T/2])
+        cube([HOLE_SPACING + EAR_LONG + EAR_SHORT, FLANGE_D, FLANGE_T], center=true);
+    translate([0, 6, FLANGE_T])
+        rotate([HOOD_TILT, 0, 0])
+            resize([HOOD_W, HOOD_TH, HOOD_H])
+                translate([0,0,0.5]) sphere(d=HOOD_H);
 }
-
-module countersink(x) {
-    translate([x, HOLE_Y, -1])
-        cylinder(d = HOLE_DIA, h = PLATE_T + 2);
-    translate([x, HOLE_Y, PLATE_T - CSK_DEPTH])
-        cylinder(d1 = HOLE_DIA, d2 = CSK_DIA, h = CSK_DEPTH + 0.01);
-}
-
-slope = atan2(BLOCK_H_BACK - BLOCK_H_FRONT, BLOCK_D);
-
-module latch() {
-    union() {
-        // mounting plate, front edge at Y=0, asymmetric ears
-        // long ear on -X, short ear on +X
-        x_left  = -(HOLE_SPACING/2 + EAR_LONG);
-        x_right =  (HOLE_SPACING/2 + EAR_SHORT);
-        difference() {
-            translate([(x_left + x_right)/2, PLATE_D/2, 0])
-                rrect(x_right - x_left, PLATE_D, PLATE_T, PLATE_R);
-            countersink( HOLE_SPACING/2);
-            countersink(-HOLE_SPACING/2);
-        }
-        // wedge block: high at the back, sloping down toward the paddle,
-        // with a hole perpendicular to the sloped face
-        difference() {
-            rotate([90, 0, 90])
-                linear_extrude(height = BLOCK_W, center = true)
-                    polygon([[BLOCK_Y0, 0], [BLOCK_Y0 + BLOCK_D, 0],
-                             [BLOCK_Y0 + BLOCK_D, BLOCK_H_BACK],
-                             [BLOCK_Y0, BLOCK_H_FRONT]]);
-            translate([0, BLOCK_Y0 + BLOCK_D/2, (BLOCK_H_BACK + BLOCK_H_FRONT)/2])
-                rotate([slope, 0, 0])
-                    cylinder(d = BLOCK_HOLE_D, h = 14, center = true);
-        }
-        // paddle: tapered, tilted up from the front edge
-        translate([0, PAD_ROOT_Y, PAD_ROOT_Z])
-            rotate([-PAD_ANGLE, 0, 0])         // tip goes -Y and +Z
-                translate([0, -PAD_LEN, 0])
-                    linear_extrude(height = PAD_T)
-                        polygon_paddle();
-        // hook: bar descending from the paddle underside + lip toward plate
-        translate([-HOOK_W/2, HOOK_BAR_Y - HOOK_BAR_T/2, HOOK_BOT_Z])
-            cube([HOOK_W, HOOK_BAR_T,
-                  PAD_ROOT_Z + (PAD_ROOT_Y - HOOK_BAR_Y)*tan(PAD_ANGLE) + 1.5 - HOOK_BOT_Z]);
-        translate([-HOOK_W/2, HOOK_BAR_Y - HOOK_BAR_T/2, HOOK_BOT_Z])
-            cube([HOOK_W, HOOK_LIP_LEN, HOOK_LIP_T]);
-    }
-}
-
-// 2D outline of the paddle: rounded trapezoid, root edge at y=PAD_LEN
-module polygon_paddle() {
-    hull() {
-        for (sx = [-1, 1]) {
-            translate([sx*(PAD_W_ROOT/2 - PAD_R), PAD_LEN - PAD_R]) circle(PAD_R);
-            translate([sx*(PAD_W_TIP/2  - PAD_R), PAD_R])           circle(PAD_R);
-        }
-    }
-}
-
-if (MIRROR) mirror([1, 0, 0]) latch();
-else latch();
