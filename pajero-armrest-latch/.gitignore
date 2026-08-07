@@ -1,0 +1,7 @@
+# intermediate artifacts from the 3D viewer / mesh extraction
+mesh_data.json
+mesh_v.txt
+mesh_f.txt
+scene.js
+__pycache__/
+*.pyc
